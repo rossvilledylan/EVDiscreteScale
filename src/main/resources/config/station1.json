@@ -1,0 +1,10 @@
+{
+	"name": "Station A",
+	"fastChargers": 40,
+	"slowChargers": 80,
+	"useEnergyMechanics": 0,
+	"arrivalRate": 105,
+	"arrivalEq": "x + 4",
+	"fastChargingRate": 43000.0,
+	"slowChargingRate": 3000.0
+}

@@ -1,0 +1,16 @@
+{
+	"startTimeHr": 8,
+	"startTimeMin": 0,
+	"startTimeSec": 0,
+	"runtime": 15768000,
+	"configFiles": [
+		"station1.json",
+		"station2.json",
+		"station3.json",
+		"station4.json",
+		"station5.json",
+		"station6.json",
+		"station7.json",
+		"station8.json"
+	]
+}

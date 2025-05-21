@@ -1,0 +1,34 @@
+The Simtime/Realtime tests will be undertaken at intervals of 3 months with two stations. Simtime will be recorded in months, and realtime in seconds.
+
+The Station Number Tests will be undertaken at intervals of 1 station (min 2) over 6 months. Simtime will be recorded in months, and realtime in seconds
+
+All stations are identical
+
+3 Months in seconds: 7884000
+
+6 Months in seconds: 15768000
+
+
+Example Station config file:
+{
+  "name": "Station F",
+  "fastChargers": 40,
+  "slowChargers": 1960,
+  "useEnergyMechanics": 0,
+  "energySources": [
+    "Geothermal",
+    "Nonrenewable",
+    "Wind",
+    "Wave"
+  ],
+  "energyAmounts": [
+    2000000,
+    1500000,
+    1500000,
+    1500000
+  ],
+  "arrivalRate": 400,
+  "arrivalEq": "x + 7",
+  "fastChargingRate": 43000.0,
+  "slowChargingRate": 3000.0
+}

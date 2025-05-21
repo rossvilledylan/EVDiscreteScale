@@ -1,0 +1,22 @@
+{
+  "name": "Station G",
+  "fastChargers": 40,
+  "slowChargers": 80,
+  "useEnergyMechanics": 0,
+  "energySources": [
+    "Geothermal",
+    "Nonrenewable",
+    "Wind",
+    "Wave"
+  ],
+  "energyAmounts": [
+    2000000,
+    1500000,
+    1500000,
+    1500000
+  ],
+  "arrivalRate": 155,
+  "arrivalEq": "x + 7",
+  "fastChargingRate": 43000.0,
+  "slowChargingRate": 3000.0
+}

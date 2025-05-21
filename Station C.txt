@@ -1,0 +1,10 @@
+At this station, there were:
+55141 fast charges that received all desired energy
+59231 slow charges that received all desired energy
+0 fast charges that received some desired energy
+0 slow charges that received some desired energy
+0 fast charges that received no energy
+0 slow charges that received no energy
+403 fast charges that got impatient
+178412 slow charges that got impatient
+253720 times backtracked
