@@ -1,1 +1,0 @@
-The Parallel Version took 1269457512000 nanoseconds
