@@ -1,0 +1,13 @@
+{
+  "defaultConfig": {
+    "fastChargers": 40,
+    "slowChargers": 80,
+    "arrivalRate": 105,
+    "fastChargingRate": 43000.0,
+    "slowChargingRate": 3000.0
+  },
+  "stations": [
+    {"name":  "Station A"},
+    {"name":  "Station B"}
+  ]
+}
