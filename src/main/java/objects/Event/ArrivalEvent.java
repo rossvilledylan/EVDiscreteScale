@@ -1,7 +1,6 @@
 package objects.Event;
 
 import java.time.Instant;
-import evlib.ev.*;
 
 /**
  * An implementation of an event which depicts a vehicle arriving at a charging station.
@@ -10,7 +9,6 @@ import evlib.ev.*;
 public class ArrivalEvent implements Event {
     private final Instant timestamp;
     private final String chargeType;
-    private final ElectricVehicle veh;
     private final int chargeDesired;
 
     /**
@@ -26,12 +24,7 @@ public class ArrivalEvent implements Event {
     public ArrivalEvent(Instant stamp, String chargeType, int remainingAmount, int desireAmount, int capacityAmount){
         this.timestamp = stamp;
         this.chargeType = chargeType;
-        Driver a = new Driver("a"); //Name is irrelevant, for our simulation
-        this.veh = new ElectricVehicle("Honda");
         this.chargeDesired = desireAmount;
-        Battery bat = new Battery(remainingAmount,capacityAmount); //This is the remaining amount and capacity of the battery, probably will be passed as an argument
-        this.veh.setBattery(bat);
-        this.veh.setDriver(a);
     }
 
     public Instant getTimestamp(){
@@ -41,12 +34,6 @@ public class ArrivalEvent implements Event {
      * @return the type of charge that a car desires, either "fast" or "slow".
      */
     public String getChargeType() { return chargeType;}
-    /**
-     * This function returns the vehicle object, which is created from arbitrary data in the Arrival Event constructor.
-     * The vehicle object is not used heavily, but is required by several EvLib functions.
-     * @return the vehicle object
-     */
-    public ElectricVehicle getVeh() { return this.veh; }
     /**
      * @return the amount of energy the car wants from the Station it has arrived at, measured in watt-hours.
      */

@@ -11,7 +11,6 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 
-import evlib.station.*;
 import objects.Event.*;
 import objects.Message.BalkMessage;
 import objects.Message.EndMessage;
@@ -32,13 +31,14 @@ public class StationSimulator {
     private Queue<Event> historyQueue = new PriorityQueue<>(
             (e1, e2) -> e2.getTimestamp().compareTo(e1.getTimestamp())
     ); //This is a priority queue that tracks the arrival and balk events that have occurred over the course of the simulation. it is REVERSED
-    private ChargingStation station;
+    //private ChargingStation station;
     private String stationName;
     private int fastChargers;
     private int fastInUse;
     private int slowChargers;
     private int slowInUse;
-    private boolean energyMechanics;
+    private double fastChargingRate;
+    private double slowChargingRate;
     private Queue<ArrivalEvent> fastQueue = new PriorityQueue<>(
             (e1, e2) -> e1.getTimestamp().compareTo(e2.getTimestamp())
     );
@@ -75,41 +75,13 @@ public class StationSimulator {
             sS.setStationName(stationName);
             fastChargers = rootNode.get("fastChargers").asInt();
             slowChargers = rootNode.get("slowChargers").asInt();
-            energyMechanics = rootNode.get("useEnergyMechanics").asBoolean();
-            String[] kinds = new String[fastChargers + slowChargers];
-            for (int i = 0; i < fastChargers; i++)
-                kinds[i] = "fast";
-            for (int i = fastChargers; i < kinds.length; i++)
-                kinds[i] = "slow";
-            if(energyMechanics) {
-                String[] sources = rootNode.get("energySources").traverse(mapper).readValueAs(String[].class);
-                double[] enAm = rootNode.get("energyAmounts").traverse(mapper).readValueAs(double[].class);
-                double[][] energyAmount = new double[sources.length][5];
-                for (int i = 0; i < sources.length; i++)
-                    for (int j = 0; j < 5; j++)
-                        energyAmount[i][j] = enAm[i];
-                for (int i = 0; i < sources.length; i++)
-                    station.setSpecificAmount(sources[i],enAm[i]);
-                station = new ChargingStation(rootNode.get("name").asText(), kinds, sources, energyAmount);
-                RechargeEvent g = new RechargeEvent(gT.getStartInstant().plusSeconds(7200), enAm);
-                eventQueue.add(g);
-            }else {
-                String[] s = new String[1];
-                s[0] = "null";
-                double[][] eA = new double[1][1];
-                eA[0][0] = 0;
-                station = new ChargingStation(rootNode.get("name").asText(), kinds, s,eA);
-            }
-            station.setChargingRateFast(rootNode.get("fastChargingRate").asInt());
-            station.setChargingRateSlow(rootNode.get("slowChargingRate").asInt());
-            stationSetup();
+            fastChargingRate = rootNode.get("fastChargingRate").asDouble();
+            slowChargingRate = rootNode.get("slowChargingRate").asDouble();
 
             stationToMonitorQueue = smQ;
             monitortoStationQueue = msQ;
 
             GenEvent c = new GenEvent(gT.getStartInstant(), rootNode.get("arrivalRate").asInt()); //Arrival rate is cars per hour
-
-            //For simplicity's sake, there will be a two-hour reocurring event that recharges the station to the level it was initially charged with.
 
 
             //Playing with GraalVM
@@ -157,9 +129,6 @@ public class StationSimulator {
             kinds[i] = "fast";
         for (int i = fastChargers; i < kinds.length; i++)
             kinds[i] = "slow";
-        station = new ChargingStation(name, kinds, sources, energyAmount);
-        station.setSpecificAmount("wind",100000);//Naive setup
-        stationSetup();
 
         GenEvent c = new GenEvent(gT.getStartInstant(), arrivalRate); //Create our first eventGenerator event
         eventQueue.add(c);
@@ -172,7 +141,6 @@ public class StationSimulator {
      * is empty, the event loop will hold for messages from the Monitor. When an End Message is reached, the loop is broken.
      */
     public void eventLoop(){
-        //System.out.println(stationName + " reporting in");
         try {
             while(true) {
                 while (!eventQueue.isEmpty()) {
@@ -203,19 +171,6 @@ public class StationSimulator {
                                 else if (((DepartureEvent) e).getChargeType().equals("slow"))
                                     sS.setNumFullSlowCharges(sS.getNumFullSlowCharges() + 1);
                                 break;
-                        }
-                    } else if (e instanceof RechargeEvent) {
-                        int i = 0;
-                        for (String s : station.getSources()) {
-                            station.setSpecificAmount(s, ((RechargeEvent) e).getCharges()[i]);
-                            i++;
-                            if (i >= station.getSources().length - 1) //There is an added "discharging" source that does not have energy, we need to ignore it
-                                break;
-                        }
-                        //Recharge the station again in two hours
-                        if (e.getTimestamp().plusSeconds(7200).isBefore(gT.getEndInstant())) {
-                            RechargeEvent g = new RechargeEvent(e.getTimestamp().plusSeconds(7200), ((RechargeEvent) e).getCharges());
-                            eventQueue.add(g);
                         }
                     }
                     //Here we check for messages from the Monitor
@@ -393,90 +348,15 @@ public class StationSimulator {
     }
 
     /**
-     * Simulates the actual charging of a car based on the information provided by an Arrival Event. Has two potential modes:
-     * with energy mechanics on, simulating a Station with limited amounts of power, or with energy mechanics off, where
-     * energy is unlimited. After charging the car, a Departure Event is placed on the Event Queue to depict the car leaving
-     * the Station.
+     * Simulates the actual charging of a car based on the information provided by an Arrival Event. Calculates the
+     * amount of simulated time is necessary to charge the requested car.
+     * After charging the car, a Departure Event is placed on the Event Queue to depict the car leaving the Station.
      * @param a the Arrival Event which is getting its charge.
      */
     public void startCharge(ArrivalEvent a){
-        ChargingEvent ev = new ChargingEvent(station, a.getVeh(),a.getChargeDesired(),a.getChargeType());
-
-        if(energyMechanics) {
-            //This is a very simplified version of ChargingEvent.java's energy checking formula. Cars never ask for more
-            //energy than they can hold, so it is unnecessary to check.
-            if (a.getChargeDesired() < station.getTotalEnergy()) {
-                ev.setEnergyToBeReceived(a.getChargeDesired());
-            } else {
-                ev.setEnergyToBeReceived(station.getTotalEnergy());
-            }
-            if (ev.getEnergyToBeReceived() == 0) {
-                DepartureEvent b = new DepartureEvent(a.getTimestamp(), a.getTimestamp(), this.stationTime, a.getChargeType(), "Uncharged");
-                eventQueue.add(b);
-                return;
-            }
-            ev.setChargingTime(((long) (ev.getEnergyToBeReceived() * 3600000 / station.getChargingRateFast())));
-            ev.setCost(station.calculatePrice(ev));
-            ev.setCondition("ready");
-            double sdf;
-            sdf = a.getChargeDesired();
-            //Determine which source of energy the car receives
-            for (String s : station.getSources()) {
-                if (sdf < station.getMap().get(s)) {
-                    double ert = station.getMap().get(s) - sdf;
-                    station.setSpecificAmount(s, ert);
-                    break;
-                } else {
-                    sdf -= station.getMap().get(s);
-                    station.setSpecificAmount(s, 0);
-                }
-            }
-        }else {
-            ev.setEnergyToBeReceived(a.getChargeDesired()); //This is due to the fact ChargingEvent will check against the energy in the station, which is 0 when there are no charging mechanics
-            ev.setChargingTime(((long) (ev.getEnergyToBeReceived() * 3600000 / station.getChargingRateFast())));
-            ev.setCost(station.calculatePrice(ev));
-            ev.setCondition("ready");
-        }
-        
-        DepartureEvent b = new DepartureEvent(calcChargingTime(a.getChargeDesired(),ev.getKindOfCharging()), a.getTimestamp(), this.stationTime, a.getChargeType(), ev.getEnergyToBeReceived() < a.getChargeDesired() ? "Partially Charged" : "Fully Charged");
+        Instant departureTime = this.stationTime.plusSeconds(((long) (a.getChargeDesired() * 3600.0 / (a.getChargeType().equals("fast") ? fastChargingRate : slowChargingRate))));
+        DepartureEvent b = new DepartureEvent(departureTime, a.getTimestamp(), this.stationTime, a.getChargeType(), "Fully Charged");
         eventQueue.add(b);
-        station.assignCharger(ev);
-        ev.execution();
-    }
-
-    /**
-     * Sets up elements of the Charging Station object that are not defined by the config file, but must be defined in order
-     * to use the Charging Station object. Basic information taken from author's examples on github.
-     */
-    public void stationSetup(){
-        //Taken from github
-        DisCharger dsc = new DisCharger(station);
-        ExchangeHandler handler = new ExchangeHandler(station);
-        ParkingSlot slot = new ParkingSlot(station);
-
-        station.addExchangeHandler(handler);
-        station.addDisCharger(dsc);
-        station.addParkingSlot(slot);
-        station.setAutomaticUpdateMode(false);
-        station.updateStorage();
-        station.setTimeofExchange(5000);
-        station.setDisChargingRate(0.1);
-        station.setInductiveChargingRate(0.001);
-
-        station.setUnitPrice(5);
-        station.setDisUnitPrice(5);
-        station.setInductivePrice(3);
-        station.setExchangePrice(20);
-    }
-
-    /**
-     * Calculates the time a particular Arrival Event will leave the Station as a Java Instant.
-     * @param charge the amount of charge desired by the Arrival Event.
-     * @param type the type of charge desired by the Arrival Event.
-     * @return the timestamp the Arrival Event will leave the Station after receiving its charge.
-     */
-    public Instant calcChargingTime(int charge, String type){
-        return this.stationTime.plusSeconds(((long) (charge * 3600 / (type.equals("fast") ? station.getChargingRateFast() : station.getChargingRateSlow()))));
     }
 
     /**

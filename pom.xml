@@ -15,11 +15,6 @@
         <graaljs.version>24.1.0</graaljs.version>
     </properties>
     <dependencies>
-        <dependency>
-            <groupId>evlib</groupId>
-            <artifactId>evlib</artifactId>
-            <version>1.0</version>
-        </dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>

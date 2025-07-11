@@ -12,6 +12,9 @@ target/
 *.iml
 *.ipr
 
+### Java ###
+*.class
+
 ### Eclipse ###
 .apt_generated
 .classpath
@@ -37,4 +40,5 @@ build/
 ### Mac OS ###
 .DS_Store
 
-report.txt
+### Output Files ###
+*.txt
