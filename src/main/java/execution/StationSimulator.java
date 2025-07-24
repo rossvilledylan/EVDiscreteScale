@@ -4,7 +4,6 @@ import org.apache.commons.math3.distribution.BetaDistribution;
 import objects.*;
 
 import java.time.Instant;
-import java.time.ZonedDateTime;
 import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -17,8 +16,6 @@ import objects.Message.EndMessage;
 import objects.Message.Message;
 import objects.Message.TimingMessage;
 import org.apache.commons.math3.distribution.GammaDistribution;
-import org.apache.commons.math3.special.Beta;
-import org.apache.commons.math3.special.Gamma;
 
 /**
  * The Station Simulator class does the most work out of all the classes. It represents a single Charging Station within the
@@ -28,10 +25,10 @@ import org.apache.commons.math3.special.Gamma;
  * Simulator maintains communication with the Monitor to send Arrival Events which have balked to other Stations.
  */
 public class StationSimulator {
-    private Queue<Event> eventQueue = new PriorityQueue<>(
+    private final Queue<Event> eventQueue = new PriorityQueue<>(
             (e1, e2) -> e1.getTimestamp().compareTo(e2.getTimestamp())
     ); //This is a priority queue for any kind of event
-    private Queue<Event> historyQueue = new PriorityQueue<>(
+    private final Queue<Event> historyQueue = new PriorityQueue<>(
             (e1, e2) -> e2.getTimestamp().compareTo(e1.getTimestamp())
     ); //This is a priority queue that tracks the arrival and balk events that have occurred over the course of the simulation. it is REVERSED
     //private ChargingStation station;
@@ -42,18 +39,18 @@ public class StationSimulator {
     private int slowInUse;
     private double fastChargingRate;
     private double slowChargingRate;
-    private Queue<ArrivalEvent> fastQueue = new PriorityQueue<>(
+    private final Queue<ArrivalEvent> fastQueue = new PriorityQueue<>(
             (e1, e2) -> e1.getTimestamp().compareTo(e2.getTimestamp())
     );
-    private Queue<ArrivalEvent> slowQueue = new PriorityQueue<>(
+    private final Queue<ArrivalEvent> slowQueue = new PriorityQueue<>(
             (e1, e2) -> e1.getTimestamp().compareTo(e2.getTimestamp())
     );
     private BlockingQueue<Message> stationToMonitorQueue;
     private BlockingQueue<Message> monitortoStationQueue;
-    private GlobalTime gT;
+    private final GlobalTime gT;
     private Instant stationTime;
     private static final ThreadLocalRandom random = ThreadLocalRandom.current();
-    private StationStats sS = new StationStats();
+    private final StationStats sS = new StationStats();
     private GammaDistribution energyDistribution;
     private BetaDistribution timeOfDayDistribution;
 
@@ -93,34 +90,6 @@ public class StationSimulator {
         } catch(Error e){
             System.out.println("The requested station file does not exist");
         }
-    }
-
-
-    /**
-     * Depreciated constructor to create a Station Simulator, used for creating a Serial simulator. No longer functions
-     * with other functions in the file, and does not interact with Monitor.
-     * @param name the Station's name.
-     * @param types the names of the types of energy the Station can use.
-     * @param sources the potential sources from which the Station can draw energy.
-     * @param energyAmount the amounts of energy the Station contains, ordered by its type.
-     * @param arrivalRate the arrival rate of cars to the station.
-     * @param gT the Global Time object.
-     */
-    public StationSimulator(String name, int[] types, String[] sources, double[][] energyAmount, double arrivalRate, GlobalTime gT){ //Can pass arguments now, I guess
-        this.gT = gT;
-        stationTime = gT.getStartInstant(); //Set the station's current time
-
-        fastChargers = types[0];
-        slowChargers = types[1];
-        String[] kinds = new String[types[0]+types[1]];
-        for (int i = 0; i < fastChargers; i++)
-            kinds[i] = "fast";
-        for (int i = fastChargers; i < kinds.length; i++)
-            kinds[i] = "slow";
-
-        GenEvent c = new GenEvent(gT.getStartInstant(), arrivalRate); //Create our first eventGenerator event
-        eventQueue.add(c);
-        eventLoop(); //Begin the event loop
     }
 
     /**

@@ -46,7 +46,6 @@ public class Main {
             ConcurrentHashMap<String, BlockingQueue<Message>> monitorToStationQueues = new ConcurrentHashMap<>();
             BlockingQueue<Message> stationToMonitorQueue = new LinkedBlockingQueue<>();
             long startTime = System.nanoTime();
-            long endTime = startTime;
             executor.submit(() -> {
                 Thread.currentThread().setName("Monitor");
                 new Monitor(gT, stationToMonitorQueue, monitorToStationQueues);
@@ -74,17 +73,20 @@ public class Main {
                 });
             }
             executor.shutdown(); // Stop accepting new tasks
+            boolean terminate = true;
             try {
-                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS); // Wait for all tasks to complete
-                endTime = System.nanoTime();
+                terminate = executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS); // Wait for all tasks to complete
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            long pDuration = endTime-startTime;
-            FileWriter writer = new FileWriter("out/simulatorReport.txt");
-            float secTime = (float) pDuration / 1000000000;
-            writer.write("The Simulation took " + pDuration + " nanoseconds or " + secTime + " seconds");
-            writer.close();
+            if(terminate) {
+                long endTime = System.nanoTime();
+                long pDuration = endTime - startTime;
+                FileWriter writer = new FileWriter("out/simulatorReport.txt");
+                float secTime = (float) pDuration / 1000000000;
+                writer.write("The Simulation took " + pDuration + " nanoseconds or " + secTime + " seconds");
+                writer.close();
+            }
 
             //System.out.println(time);
         }catch (IOException e){

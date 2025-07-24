@@ -219,7 +219,7 @@ public class StationStats {
             writer.write((this.energyGiven/1000)/numTotalCharges + " average kWh distributed per car\n");
             writer.close();
         } catch (IOException e){
-            e.printStackTrace();
+            System.out.println("Failed to write stats.");
         }
     }
 }
