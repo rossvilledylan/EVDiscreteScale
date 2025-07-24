@@ -3,8 +3,5 @@
 	"startTimeMin": 0,
 	"startTimeSec": 0,
 	"runtime": 2628000,
-	"configFiles": [
-		"station1.json",
-		"station2.json"
-	]
+	"configFile": "stationConfig.json"
 }

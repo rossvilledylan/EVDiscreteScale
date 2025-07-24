@@ -40,9 +40,6 @@ build/
 ### Mac OS ###
 .DS_Store
 
-### Output Files ###
+### Production Files ###
 out/
-
-### Data Manipulation Files ###
-*.csv
-*.py
+dataFitting/

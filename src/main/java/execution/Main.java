@@ -1,5 +1,7 @@
 package execution;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import objects.GlobalTime;
 import objects.Message.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,6 +10,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.FileWriter;
 
+import java.util.ArrayList;
 import java.util.concurrent.*;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
@@ -36,37 +39,38 @@ public class Main {
             }
             ObjectMapper mapper = new ObjectMapper();
             JsonNode rootNode = mapper.readTree(inputStream);
-            String[] configFilesList = rootNode.get("configFiles").traverse(mapper).readValueAs(String[].class);
+            String configFilesList = rootNode.get("configFile").asText();
             GlobalTime gT = new GlobalTime(rootNode.get("startTimeHr").asInt(), rootNode.get("startTimeMin").asInt(), rootNode.get("startTimeSec").asInt(), rootNode.get("runtime").asInt());
-
-            //Serial version
-            long startTime = System.nanoTime();
-            /*for (int i = 0; i<configFilesList.length; i++){
-                StationSimulator b = new StationSimulator(configFilesList[i], gT);
-            }*/
-            long endTime = System.nanoTime();
-            long serialDuration = endTime-startTime;
 
             //Parallel Version
             ConcurrentHashMap<String, BlockingQueue<Message>> monitorToStationQueues = new ConcurrentHashMap<>();
             BlockingQueue<Message> stationToMonitorQueue = new LinkedBlockingQueue<>();
-            startTime = System.nanoTime();
+            long startTime = System.nanoTime();
+            long endTime = startTime;
             executor.submit(() -> {
                 Thread.currentThread().setName("Monitor");
                 new Monitor(gT, stationToMonitorQueue, monitorToStationQueues);
             });
-            for (String config : configFilesList){
-                inputStream = Main.class.getClassLoader().getResourceAsStream("config/"+config);
-                if(inputStream == null){
-                    throw new IOException("Station config file not found in resources");
-                }
-                rootNode = mapper.readTree(inputStream);
+            inputStream = Main.class.getClassLoader().getResourceAsStream("config/"+configFilesList);
+            if(inputStream == null){
+                throw new IOException("Station config file not found in resources");
+            }
+            rootNode = mapper.readTree(inputStream);
+            JsonNode defaultConig = rootNode.get("defaultConfig");
+            ArrayNode stations = (ArrayNode) rootNode.get("stations");
+            ArrayList<ObjectNode> fullConfigs = new ArrayList<>();
+            for (JsonNode override: stations){
+                ObjectNode merged = defaultConig.deepCopy();
+                override.fields().forEachRemaining(field -> merged.set(field.getKey(),field.getValue()));
+                fullConfigs.add(merged);
+            }
+            for (ObjectNode fullConfig : fullConfigs){
                 BlockingQueue<Message> monitorToStationQueue = new LinkedBlockingQueue<>();
-                String stationName = rootNode.get("name").asText();
+                String stationName = fullConfig.get("name").asText();
                 monitorToStationQueues.put(stationName,monitorToStationQueue);
                 executor.submit(() -> {
                     Thread.currentThread().setName(stationName);
-                    new StationSimulator(config, gT, stationToMonitorQueue, monitorToStationQueue);
+                    new StationSimulator(fullConfig, gT, stationToMonitorQueue, monitorToStationQueue);
                 });
             }
             executor.shutdown(); // Stop accepting new tasks
@@ -78,13 +82,15 @@ public class Main {
             }
             long pDuration = endTime-startTime;
             FileWriter writer = new FileWriter("out/simulatorReport.txt");
-            writer.write("The Serial Version took " + serialDuration + " nanoseconds\n");
-            writer.write("The Parallel Version took " + pDuration + " nanoseconds");
+            float secTime = (float) pDuration / 1000000000;
+            writer.write("The Simulation took " + pDuration + " nanoseconds or " + secTime + " seconds");
             writer.close();
-            float time = (float) pDuration / 1000000000;
+
             //System.out.println(time);
         }catch (IOException e){
             System.out.println("The config file cannot be found");
+        }catch (NullPointerException e){
+            System.out.println("A parameter could not be found: " + e);
         }
 
     }

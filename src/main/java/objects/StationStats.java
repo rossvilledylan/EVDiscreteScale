@@ -19,6 +19,8 @@ public class StationStats {
     private int numSlowBalks;
     private int numBacktracks;
 
+    private double energyGiven;
+
     /**
      * Constructor to create a Station Stats object. All stats are set to zero at the beginning of the simulation.
      */
@@ -32,6 +34,8 @@ public class StationStats {
         this.numFaskBalks = 0;
         this.numSlowBalks = 0;
         this.numBacktracks = 0;
+
+        this.energyGiven = 0;
     }
 
     /**
@@ -99,6 +103,11 @@ public class StationStats {
     public int getNumBacktracks(){
         return numBacktracks;
     }
+
+    /**
+     * @return the total amount of energy, in watts, that a station has distributed during the simulation
+     */
+    public double getEnergyGiven() { return energyGiven; }
 
     /**
      * Sets the station name for this stat-taking object.
@@ -175,21 +184,39 @@ public class StationStats {
     }
 
     /**
+     * @param wattAmount the amount of energy that has been used and must be added to the station's total;
+     */
+    public void addEnergyGiven(double wattAmount){
+        this.energyGiven += wattAmount;
+    }
+
+    /**
+     * @param wattAmount the amount of energy that is being subtracted from a station's total distributed.
+     */
+    public void subtractEnergyGiven(double wattAmount){
+        this.energyGiven -= wattAmount;
+    }
+
+    /**
      * Prints the statistics captured during the runtime of a station to a file.
      */
     public void printStats(){
+        int numTotalCharges = this.numFullFastCharges + this.numFullSlowCharges + this.numPartialFastCharges + this.numPartialSlowCharges;
         try {
             FileWriter writer = new FileWriter("out/" + stationName + ".txt");
             writer.write("At this station, there were:\n");
             writer.write(this.numFullFastCharges + " fast charges that received all desired energy\n");
             writer.write(this.numFullSlowCharges + " slow charges that received all desired energy\n");
-            writer.write(this.numPartialFastCharges + " fast charges that received some desired energy\n");
-            writer.write(this.numPartialSlowCharges + " slow charges that received some desired energy\n");
-            writer.write(this.numNoFastCharges + " fast charges that received no energy\n");
-            writer.write(this.numNoSlowCharges + " slow charges that received no energy\n");
+            writer.write((numTotalCharges + " total charging eventn"));
+            //writer.write(this.numPartialFastCharges + " fast charges that received some desired energy\n");
+            //writer.write(this.numPartialSlowCharges + " slow charges that received some desired energy\n");
+            //writer.write(this.numNoFastCharges + " fast charges that received no energy\n");
+            //writer.write(this.numNoSlowCharges + " slow charges that received no energy\n");
             writer.write(this.numFaskBalks + " fast charges that got impatient\n");
             writer.write(this.numSlowBalks + " slow charges that got impatient\n");
-            writer.write(this.numBacktracks + " times backtracked\n");
+            writer.write(this.numBacktracks + " times backtracked\n\n");
+            writer.write(this.energyGiven/1000 + " kWh distributed\n");
+            writer.write((this.energyGiven/1000)/numTotalCharges + " average kWh distributed per car\n");
             writer.close();
         } catch (IOException e){
             e.printStackTrace();

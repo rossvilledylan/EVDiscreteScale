@@ -1,10 +1,10 @@
 package execution;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import java.io.*;
+import org.apache.commons.math3.distribution.BetaDistribution;
 import objects.*;
 
 import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -16,6 +16,9 @@ import objects.Message.BalkMessage;
 import objects.Message.EndMessage;
 import objects.Message.Message;
 import objects.Message.TimingMessage;
+import org.apache.commons.math3.distribution.GammaDistribution;
+import org.apache.commons.math3.special.Beta;
+import org.apache.commons.math3.special.Gamma;
 
 /**
  * The Station Simulator class does the most work out of all the classes. It represents a single Charging Station within the
@@ -51,58 +54,43 @@ public class StationSimulator {
     private Instant stationTime;
     private static final ThreadLocalRandom random = ThreadLocalRandom.current();
     private StationStats sS = new StationStats();
+    private GammaDistribution energyDistribution;
+    private BetaDistribution timeOfDayDistribution;
 
     /**
      * Constructor to create a Station Simulator. Reads data from the config file in order to set up a ChargingStation object,
      * which is used to simulate the charging of cars. Also utilizes data from the config file to specialize its simulation,
      * such as the arrival rate, whether to use limited energy mechanics, and the unique name of the Station.
-     * @param configFile the name of the configuration file which is read to set up the Station and its simulation details.
+     * @param config the JsonNode which contains all config data from the config file
      * @param gT the Global Time object.
      * @param smQ the message queue which goes from all Stations to the Monitor.
      * @param msQ the message queue which goes from the Monitor to this Station.
      */
-    public StationSimulator(String configFile, GlobalTime gT, BlockingQueue<Message> smQ, BlockingQueue<Message> msQ){
+    public StationSimulator(JsonNode config, GlobalTime gT, BlockingQueue<Message> smQ, BlockingQueue<Message> msQ){
         this.gT = gT;
         stationTime = gT.getStartInstant();
         try {
-            InputStream inputStream = Main.class.getClassLoader().getResourceAsStream("config/"+configFile);
-            if(inputStream == null){
-                throw new IOException("Station config file not found in resources");
-            }
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode rootNode = mapper.readTree(inputStream);
-            stationName = rootNode.get("name").asText();
+            stationName = config.get("name").asText();
             sS.setStationName(stationName);
-            fastChargers = rootNode.get("fastChargers").asInt();
-            slowChargers = rootNode.get("slowChargers").asInt();
-            fastChargingRate = rootNode.get("fastChargingRate").asDouble();
-            slowChargingRate = rootNode.get("slowChargingRate").asDouble();
+            fastChargers = config.get("fastChargers").asInt();
+            slowChargers = config.get("slowChargers").asInt();
+            fastChargingRate = config.get("fastChargingRate").asDouble();
+            slowChargingRate = config.get("slowChargingRate").asDouble();
 
             stationToMonitorQueue = smQ;
             monitortoStationQueue = msQ;
 
-            GenEvent c = new GenEvent(gT.getStartInstant(), rootNode.get("arrivalRate").asInt()); //Arrival rate is cars per hour
+            GenEvent c = new GenEvent(gT.getStartInstant(), config.get("arrivalRate").asInt()); //Arrival rate is cars per hour
 
-
-            //Playing with GraalVM
-            /*String eq = rootNode.get("arrivalEq").asText(); //The JSON does not need the "y = " part of the equation
-            try(Context context = Context.create()){
-                int xValue = 2;
-
-                String jsFunc = "function evaluate(x) { return " + eq + "; }";
-                context.eval("js",jsFunc);
-                Value evaluateFunction = context.getBindings("js").getMember("evaluate");
-                int result = evaluateFunction.execute(xValue).asInt();
-                System.out.println(result);
-            }*/
-            //
+            energyDistribution = new GammaDistribution(2.3127598129490075, 3.870663519530382);
+            timeOfDayDistribution = new BetaDistribution(4.614972052581306, 3.805085312822052); //
 
             eventQueue.add(c);
             eventLoop();
             //System.out.println(stationName + " has finished\n" + eventQueue + "\n" + monitortoStationQueue + "\nFast in use: " + fastInUse + "\nSlow in use: " + slowInUse);
             sS.printStats();
 
-        } catch(IOException e){
+        } catch(Error e){
             System.out.println("The requested station file does not exist");
         }
     }
@@ -209,30 +197,20 @@ public class StationSimulator {
      * of every Arrival Event are described here as well, detailing their battery life, the amount of energy they want, and
      * what kind of charge they want.
      * @param arrivalRate the arrival rate of the current Station. This value is best described as the number of cars
-     *                    that arrive per hour.
+     *                    that arrive per day.
      */
     public void genEvents(double arrivalRate){
-        long hourInSeconds = 3600;
-        double avgInterArrivalTime = hourInSeconds/arrivalRate;
-        Instant currentTime = this.stationTime;
-        // **Determine how often a slow/fast charger is picked**
-        while (true) {
-            // Generate the next inter-arrival time in seconds
-            double interArrivalTime = -Math.log(1 - random.nextDouble()) * avgInterArrivalTime;
-            // Calculate the next event timestamp
-            currentTime = currentTime.plusSeconds((long) interArrivalTime);
-            // Stop if we exceed one hour
-            if (currentTime.isAfter(this.stationTime.plusSeconds((long) hourInSeconds))) {
-                break;
-            }
-            // Create a new ArrivalEvent and add it to the list
-            // As of 11/14, arrival events are more likely to be fast than slow
-            //
-            // It appears that the numbers are measured in *watt-hours*. 40000 watt-hours is, according to Google, the average battery size
-            int remaining = random.nextInt(40001);
-            eventQueue.add(new ArrivalEvent(currentTime, random.nextDouble() < 0.67 ? "fast" : "slow",remaining,40000-remaining,40000));
+        long dayInSeconds = 86400;
+        for (int i = 0; i< arrivalRate; i++){
+            double arrivalTime = -0.042 + timeOfDayDistribution.sample() * 1.110;
+            arrivalTime = Math.max(0.0, Math.min(1.0, arrivalTime));
+            long secondsIntoDay = (long) (arrivalTime * dayInSeconds);
+
+            Instant currentTime = this.stationTime.plusSeconds(secondsIntoDay);
+            double remaining = energyDistribution.sample() * 1000.0;
+            eventQueue.add(new ArrivalEvent(currentTime, random.nextDouble() < 0.67 ? "fast" : "slow",remaining));
         }
-        GenEvent e = new GenEvent(this.stationTime.plusSeconds(hourInSeconds), arrivalRate);
+        GenEvent e = new GenEvent(this.stationTime.plusSeconds(dayInSeconds), arrivalRate);
         eventQueue.add(e);
     }
 
@@ -356,6 +334,7 @@ public class StationSimulator {
     public void startCharge(ArrivalEvent a){
         Instant departureTime = this.stationTime.plusSeconds(((long) (a.getChargeDesired() * 3600.0 / (a.getChargeType().equals("fast") ? fastChargingRate : slowChargingRate))));
         DepartureEvent b = new DepartureEvent(departureTime, a.getTimestamp(), this.stationTime, a.getChargeType(), "Fully Charged");
+        sS.addEnergyGiven(a.getChargeDesired());
         eventQueue.add(b);
     }
 
@@ -403,6 +382,7 @@ public class StationSimulator {
                     a = historyQueue.remove();
                     if (a instanceof ArrivalEvent) {
                         eventQueue.add(a);
+                        sS.subtractEnergyGiven(((ArrivalEvent) a).getChargeDesired());
                     } else if (a instanceof BalkEvent) {
                         monitortoStationQueue.add(new BalkMessage(a.getTimestamp(),this.stationName,((BalkEvent) a).getEventToLeave(),true));
                         //if(this.stationName.equals("Station B"))
